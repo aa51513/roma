@@ -5,21 +5,22 @@ use futures::StreamExt;
 
 use log::{warn, info, debug};
 use async_trait::async_trait;
+use tokio::sync::Mutex;
 
 use quinn::{NewConnection, Incoming, IncomingBiStreams};
 
 use super::QuicStream;
-use crate::utils::{self, CommonAddr};
+use crate::utils::CommonAddr;
 use crate::transport::{AsyncConnect, AsyncAccept, Transport};
 
 pub struct Acceptor<C> {
     cc: Arc<C>,
-    lis: Incoming,
+    lis: Arc<Mutex<Incoming>>,
     addr: CommonAddr,
 }
 
 impl<C> Acceptor<C> {
-    pub fn new(cc: Arc<C>, lis: Incoming, addr: CommonAddr) -> Self {
+    pub fn new(cc: Arc<C>, lis: Arc<Mutex<Incoming>>, addr: CommonAddr) -> Self {
         Acceptor { cc, lis, addr }
     }
 }
@@ -38,11 +39,13 @@ impl AsyncAccept for Acceptor<()> {
     fn addr(&self) -> &CommonAddr { &self.addr }
 
     async fn accept_base(&self) -> Result<(Self::Base, SocketAddr)> {
-        // new connection
-        let lis = unsafe { utils::const_cast(&self.lis) };
-        let connecting = lis.next().await.ok_or_else(|| {
-            Error::new(ErrorKind::ConnectionAborted, "connection abort")
-        })?;
+        // Extract the next connection from the Incoming stream while holding the lock
+        let connecting = {
+            let mut lis = self.lis.lock().await;
+            lis.next().await.ok_or_else(|| {
+                Error::new(ErrorKind::ConnectionAborted, "connection abort")
+            })?
+        };
 
         // early data
         let new_conn = match connecting.into_0rtt() {
@@ -85,11 +88,13 @@ where
     fn addr(&self) -> &CommonAddr { &self.addr }
 
     async fn accept_base(&self) -> Result<(Self::Base, SocketAddr)> {
-        // new connection
-        let lis = unsafe { utils::const_cast(&self.lis) };
-        let connecting = lis.next().await.ok_or_else(|| {
-            Error::new(ErrorKind::ConnectionAborted, "connection abort")
-        })?;
+        // Extract the next connection from the Incoming stream while holding the lock
+        let connecting = {
+            let mut lis = self.lis.lock().await;
+            lis.next().await.ok_or_else(|| {
+                Error::new(ErrorKind::ConnectionAborted, "connection abort")
+            })?
+        };
 
         // early data
         let new_conn = match connecting.into_0rtt() {
@@ -144,25 +149,17 @@ where
             None => warn!("no more quic-mux stream"),
         }
     }
-    /*
-    while let Some(Ok((send, recv))) = bi_streams.next().await {
-        tokio::spawn(bidi_copy_with_stream(
-            cc.clone(),
-            QuicStream::new(send, recv),
-        ));
-    }
-    */
 }
 
 // Raw Acceptor, used to setup the Quic Acceptor above
 pub struct RawAcceptor {
-    lis: Incoming,
+    lis: Arc<Mutex<Incoming>>,
     addr: CommonAddr,
 }
 
 impl RawAcceptor {
     pub fn new(lis: Incoming, addr: CommonAddr) -> Self {
-        RawAcceptor { lis, addr }
+        RawAcceptor { lis: Arc::new(Mutex::new(lis)), addr }
     }
     pub fn set_connector<C>(self, cc: Arc<C>) -> Acceptor<C> {
         Acceptor::new(cc, self.lis, self.addr)
@@ -182,11 +179,13 @@ impl AsyncAccept for RawAcceptor {
     fn addr(&self) -> &CommonAddr { &self.addr }
 
     async fn accept_base(&self) -> Result<(Self::Base, SocketAddr)> {
-        // new connection
-        let lis = unsafe { utils::const_cast(&self.lis) };
-        let connecting = lis.next().await.ok_or_else(|| {
-            Error::new(ErrorKind::ConnectionAborted, "connection abort")
-        })?;
+        // Extract the next connection from the Incoming stream while holding the lock
+        let connecting = {
+            let mut lis = self.lis.lock().await;
+            lis.next().await.ok_or_else(|| {
+                Error::new(ErrorKind::ConnectionAborted, "connection abort")
+            })?
+        };
 
         // early data
         let new_conn = match connecting.into_0rtt() {

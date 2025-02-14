@@ -1,4 +1,4 @@
-use std::{cell::UnsafeCell, net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr}};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 #[macro_use]
 pub mod macros;
@@ -14,12 +14,6 @@ pub use types::{CommonAddr, MaybeQuic};
 pub mod cert;
 #[cfg(feature = "tls")]
 pub use cert::{load_certs, load_keys, generate_cert_key};
-
-#[inline]
-pub unsafe fn const_cast<T>(x: &T) -> &mut T {
-    let cell = x as *const T as *const UnsafeCell<T>;
-    &mut *(*cell).get()
-}
 
 #[allow(dead_code)]
 #[inline]
