@@ -16,7 +16,7 @@ pub use dns::DnsServerConfig;
 pub use net::NetConfig;
 pub use tls::TLSConfig;
 pub use trans::TransportConfig;
-pub use ep::{EndpointConfig, EpHalfConfig, MaybeHalfConfig};
+pub use ep::{EndpointConfig, EpHalfConfig};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GlobalConfig {

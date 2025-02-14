@@ -1,4 +1,4 @@
-use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
+use std::{cell::UnsafeCell, net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr}};
 
 #[macro_use]
 pub mod macros;
@@ -15,12 +15,10 @@ pub mod cert;
 #[cfg(feature = "tls")]
 pub use cert::{load_certs, load_keys, generate_cert_key};
 
-#[allow(clippy::mut_from_ref)]
 #[inline]
 pub unsafe fn const_cast<T>(x: &T) -> &mut T {
-    let const_ptr = x as *const T;
-    let mut_ptr = const_ptr as *mut T;
-    &mut *mut_ptr
+    let cell = x as *const T as *const UnsafeCell<T>;
+    &mut *(*cell).get()
 }
 
 #[allow(dead_code)]
