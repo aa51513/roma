@@ -9,7 +9,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-corss:
+  build-cross:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -25,24 +25,19 @@ jobs:
           - target: x86_64-pc-windows-gnu
             output: roma.exe
     steps:
-      - uses: actions/checkout@v2
-      - name: install toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust@v1
         with:
-          toolchain: stable
           target: ${{ matrix.target }}
-          override: true
-      - name: compile
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --release --target=${{ matrix.target }}
-      - name: upload
+      - name: Compile
+        run: cargo build --release --target=${{ matrix.target }}
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: roma-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/${{ matrix.output }}
+
   build-apple:
     runs-on: macos-latest
     strategy:
@@ -50,22 +45,15 @@ jobs:
         target:
           - x86_64-apple-darwin
     steps:
-      - uses: actions/checkout@v2
-      - name: install toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust@v1
         with:
-          toolchain: stable
           target: ${{ matrix.target }}
-          override: true
-      - name: compile
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: false
-          command: build
-          args: --release --target=${{ matrix.target }}
-      - name: upload
+      - name: Compile
+        run: cargo build --release --target=${{ matrix.target }}
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: roma-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/roma
-
