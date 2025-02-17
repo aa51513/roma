@@ -5,7 +5,7 @@ on:
       - 'v*.*.*'
 
 jobs:
-  release-corss:
+  release-cross:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -21,31 +21,28 @@ jobs:
           - target: x86_64-pc-windows-gnu
             output: roma.exe
     steps:
-      - uses: actions/checkout@v2
-      - name: install toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4  # 更新到最新版本
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust@v1
         with:
           toolchain: stable
           target: ${{ matrix.target }}
           override: true
-      - name: compile
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --release --target=${{ matrix.target }}
-      - name: pack
+      - name: Compile
+        run: cargo build --release --target=${{ matrix.target }}
+      - name: Pack
         run: |
           mkdir -p release-${{ matrix.target }}
           cd release-${{ matrix.target }}
           tar -C ../target/${{ matrix.target }}/release -zcf roma-${{ matrix.target }}.tar.gz ${{ matrix.output }}
           sha256sum roma-${{ matrix.target }}.tar.gz > roma-${{ matrix.target }}.sha256
-      - name: release
+      - name: Release
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: release-${{ matrix.target }}/*
+
   release-apple:
     runs-on: macos-latest
     strategy:
@@ -53,26 +50,22 @@ jobs:
         target:
           - x86_64-apple-darwin
     steps:
-      - uses: actions/checkout@v2
-      - name: install toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4  # 更新到最新版本
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust@v1
         with:
           toolchain: stable
           target: ${{ matrix.target }}
           override: true
-      - name: compile
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: false
-          command: build
-          args: --release --target=${{ matrix.target }}
-      - name: pack
+      - name: Compile
+        run: cargo build --release --target=${{ matrix.target }}
+      - name: Pack
         run: |
           mkdir -p release-${{ matrix.target }}
           cd release-${{ matrix.target }}
           tar -C ../target/${{ matrix.target }}/release/ -zcf roma-${{ matrix.target }}.tar.gz roma
           shasum -a 256 roma-${{ matrix.target }}.tar.gz > roma-${{ matrix.target }}.sha256
-      - name: release
+      - name: Release
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
