@@ -27,12 +27,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain
-        uses: actions-rust-lang/setup-rust@v1
+        uses: rust-lang/setup-rust@v1
         with:
-          target: ${{ matrix.target }}
+          rust-version: stable
+          targets: ${{ matrix.target }}
       - name: Compile
-        run: cargo build --release --target=${{ matrix.target }}
-      - name: Upload artifact
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --release --target=${{ matrix.target }}
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: roma-${{ matrix.target }}
@@ -47,12 +52,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain
-        uses: actions-rust-lang/setup-rust@v1
+        uses: rust-lang/setup-rust@v1
         with:
-          target: ${{ matrix.target }}
+          rust-version: stable
+          targets: ${{ matrix.target }}
       - name: Compile
-        run: cargo build --release --target=${{ matrix.target }}
-      - name: Upload artifact
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: false
+          command: build
+          args: --release --target=${{ matrix.target }}
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: roma-${{ matrix.target }}
