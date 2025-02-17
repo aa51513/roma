@@ -21,15 +21,18 @@ jobs:
           - target: x86_64-pc-windows-gnu
             output: roma.exe
     steps:
-      - uses: actions/checkout@v4  # 更新到最新版本
+      - uses: actions/checkout@v4
       - name: Install Rust toolchain
-        uses: actions-rust-lang/setup-rust@v1
+        uses: rust-lang/setup-rust@v1
         with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          override: true
+          rust-version: stable
+          targets: ${{ matrix.target }}
       - name: Compile
-        run: cargo build --release --target=${{ matrix.target }}
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --release --target=${{ matrix.target }}
       - name: Pack
         run: |
           mkdir -p release-${{ matrix.target }}
@@ -50,15 +53,18 @@ jobs:
         target:
           - x86_64-apple-darwin
     steps:
-      - uses: actions/checkout@v4  # 更新到最新版本
+      - uses: actions/checkout@v4
       - name: Install Rust toolchain
-        uses: actions-rust-lang/setup-rust@v1
+        uses: rust-lang/setup-rust@v1
         with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          override: true
+          rust-version: stable
+          targets: ${{ matrix.target }}
       - name: Compile
-        run: cargo build --release --target=${{ matrix.target }}
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: false
+          command: build
+          args: --release --target=${{ matrix.target }}
       - name: Pack
         run: |
           mkdir -p release-${{ matrix.target }}
