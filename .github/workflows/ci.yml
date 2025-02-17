@@ -4,13 +4,12 @@ jobs:
   clippy_check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4  # 更新到最新版本
+      - name: Install Rust toolchain with clippy
+        uses: actions-rust-lang/setup-rust@v1
         with:
-            toolchain: stable
-            components: clippy
-            override: true
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features
+          toolchain: stable
+          components: clippy
+          override: true
+      - name: Run clippy
+        run: cargo clippy --all-features
