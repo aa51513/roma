@@ -23,9 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain
-        uses: rust-lang/setup-rust@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          rust-version: stable
           targets: ${{ matrix.target }}
       - name: Compile
         uses: actions-rs/cargo@v1
@@ -33,47 +32,3 @@ jobs:
           use-cross: true
           command: build
           args: --release --target=${{ matrix.target }}
-      - name: Pack
-        run: |
-          mkdir -p release-${{ matrix.target }}
-          cd release-${{ matrix.target }}
-          tar -C ../target/${{ matrix.target }}/release -zcf roma-${{ matrix.target }}.tar.gz ${{ matrix.output }}
-          sha256sum roma-${{ matrix.target }}.tar.gz > roma-${{ matrix.target }}.sha256
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          files: release-${{ matrix.target }}/*
-
-  release-apple:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        target:
-          - x86_64-apple-darwin
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust toolchain
-        uses: rust-lang/setup-rust@v1
-        with:
-          rust-version: stable
-          targets: ${{ matrix.target }}
-      - name: Compile
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: false
-          command: build
-          args: --release --target=${{ matrix.target }}
-      - name: Pack
-        run: |
-          mkdir -p release-${{ matrix.target }}
-          cd release-${{ matrix.target }}
-          tar -C ../target/${{ matrix.target }}/release/ -zcf roma-${{ matrix.target }}.tar.gz roma
-          shasum -a 256 roma-${{ matrix.target }}.tar.gz > roma-${{ matrix.target }}.sha256
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          files: release-${{ matrix.target }}/*
