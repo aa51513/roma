@@ -121,3 +121,58 @@ impl AsyncWrite for WriteHalf {
         Pin::new(&mut self.get_mut().inner).poll_shutdown(cx)
     }
 }
+
+
+#[cfg(target_os = "linux")]
+pub use linux_ext::*;
+
+#[cfg(target_os = "linux")]
+pub mod linux_ext {
+    use super::*;
+    use std::io::{Error, ErrorKind};
+    use tokio::io::Interest;
+
+    #[inline]
+    pub fn split(x: &mut PlainStream) -> (ReadHalf, WriteHalf) {
+        (ReadHalf(&*x), WriteHalf(&*x))
+    }
+
+    // tokio >= 1.9.0
+    #[inline]
+    pub fn try_io<R>(
+        x: &PlainStream,
+        interest: Interest,
+        f: impl FnOnce() -> Result<R>,
+    ) -> Result<R> {
+        match x {
+            PlainStream::TCP(x) => x.try_io(interest, f),
+            #[cfg(feature = "uds")]
+            PlainStream::UDS(x) => x.try_io(interest, f),
+        }
+    }
+
+    #[inline]
+    pub async fn readable(x: &PlainStream) -> Result<()> {
+        match x {
+            PlainStream::TCP(x) => x.readable().await,
+            #[cfg(feature = "uds")]
+            PlainStream::UDS(x) => x.readable().await,
+        }
+    }
+
+    #[inline]
+    pub async fn writable(x: &PlainStream) -> Result<()> {
+        match x {
+            PlainStream::TCP(x) => x.writable().await,
+            #[cfg(feature = "uds")]
+            PlainStream::UDS(x) => x.writable().await,
+        }
+    }
+
+    #[inline]
+    pub fn clear_readiness(x: &PlainStream, interest: Interest) {
+        let _ = try_io(x, interest, || {
+            Err(Error::new(ErrorKind::WouldBlock, "")) as Result<()>
+        });
+    }
+}
