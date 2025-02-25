@@ -5,8 +5,6 @@ use std::io::Result;
 use tokio::io::{AsyncRead, AsyncWrite};
 use quinn::{SendStream, RecvStream};
 
-use crate::transport::IOStream;
-
 pub struct QuicStream {
     send: SendStream,
     recv: RecvStream,
@@ -21,8 +19,6 @@ impl QuicStream {
         QuicStream { send, recv }
     }
 }
-
-impl IOStream for QuicStream {}
 
 impl AsyncRead for QuicStream {
     #[inline]

@@ -30,13 +30,12 @@ pub struct GlobalConfig {
 }
 
 fn default_dns_servers() -> Vec<DnsServerConfig>{
-    let mut vec: Vec<DnsServerConfig> = Vec::with_capacity(4);
-    vec.push(DnsServerConfig{addr:"8.8.8.8:53".to_string(),..Default::default()});
-    vec.push(DnsServerConfig{addr:"8.8.4.4:53".to_string(),..Default::default()});
-    vec.push(DnsServerConfig{addr:"[2001:4860:4860::8888]:53".to_string(),..Default::default()});
-    vec.push(DnsServerConfig{addr:"[2001:4860:4860::8844]:53".to_string(),..Default::default()});
-
-    vec
+    vec![
+        DnsServerConfig { addr: "8.8.8.8:53".to_string(), ..Default::default() },
+        DnsServerConfig { addr: "8.8.4.4:53".to_string(), ..Default::default() },
+        DnsServerConfig { addr: "[2001:4860:4860::8888]:53".to_string(), ..Default::default() },
+        DnsServerConfig { addr: "[2001:4860:4860::8844]:53".to_string(), ..Default::default() },
+    ]
 }
 
 impl GlobalConfig {

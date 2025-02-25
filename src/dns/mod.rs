@@ -31,7 +31,7 @@ lazy_static! {
             vec![],
             NameServerConfigGroup::from(global_name_server_configs().lock().unwrap().clone()),
         );
-        let resolver_opts = global_resolver_opts().lock().unwrap().clone();
+        let resolver_opts = *global_resolver_opts().lock().unwrap();
         TokioAsyncResolver::tokio(config, resolver_opts).unwrap()
     };
 }

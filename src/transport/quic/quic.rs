@@ -78,7 +78,7 @@ pub struct Connector {
     sni: String,
     max_concurrent: usize,
     count: AtomicUsize,
-    channel: RwLock<Option<Connection<TlsSession>>>,
+    channel: RwLock<Option<Connection>>,
 }
 
 impl Connector {
@@ -125,7 +125,7 @@ impl AsyncConnect for Connector {
     }
 }
 
-async fn new_client(cc: &Connector) -> Result<Connection<TlsSession>> {
+async fn new_client(cc: &Connector) -> Result<Connection> {
     // reuse existed connection
     trace!("quic init new client");
     let channel = (*cc.channel.read().unwrap()).clone();
@@ -179,13 +179,13 @@ async fn new_client(cc: &Connector) -> Result<Connection<TlsSession>> {
 // Acceptor
 pub struct Acceptor<C> {
     cc: Arc<C>,
-    lis: Incoming,
+    lis: UnsafeCell<Incoming>,
     addr: CommonAddr,
 }
 
 impl<C> Acceptor<C> {
     pub fn new(cc: Arc<C>, lis: Incoming, addr: CommonAddr) -> Self {
-        Acceptor { cc, lis, addr }
+        Acceptor { cc, lis: UnsafeCell::new(lis), addr }
     }
 }
 
@@ -321,16 +321,16 @@ where
 
 // Raw Acceptor, used to setup the Quic Acceptor above
 pub struct RawAcceptor {
-    lis: Incoming,
+    lis: UnsafeCell<Incoming>,
     addr: CommonAddr,
 }
 
 impl RawAcceptor {
     pub fn new(lis: Incoming, addr: CommonAddr) -> Self {
-        RawAcceptor { lis, addr }
+        RawAcceptor { lis: UnsafeCell::new(lis), addr }
     }
     pub fn set_connector<C>(self, cc: Arc<C>) -> Acceptor<C> {
-        Acceptor::new(cc, self.lis, self.addr)
+        Acceptor::new(cc, unsafe { self.lis.into_inner() }, self.addr)
     }
 }
 

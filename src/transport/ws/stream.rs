@@ -14,14 +14,11 @@ use tokio_tungstenite::tungstenite;
 use tungstenite::Message;
 
 use crate::utils::WS_BUF_SIZE;
-use crate::transport::IOStream;
 
 pub struct WebSocketStream<S> {
     io: RawWebSocketStream<S>,
     buffer: BytesMut,
 }
-
-impl<S: IOStream> IOStream for WebSocketStream<S> {}
 
 impl<S> WebSocketStream<S> {
     #[inline]

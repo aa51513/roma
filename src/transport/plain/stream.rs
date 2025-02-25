@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::io::Result;
+use std::cell::UnsafeCell;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
 
@@ -9,7 +10,7 @@ use tokio::net::TcpStream;
 #[cfg(all(unix, feature = "uds"))]
 use tokio::net::UnixStream;
 
-use crate::transport::IOStream;
+use crate::utils;
 
 #[allow(clippy::upper_case_acronyms)]
 pub enum PlainStream {
@@ -18,15 +19,9 @@ pub enum PlainStream {
     UDS(UnixStream),
 }
 
-pub struct ReadHalf {
-    inner: Box<dyn AsyncRead + Unpin + Send + Sync>,
-}
+pub struct ReadHalf<'a>(&'a UnsafeCell<PlainStream>);
 
-pub struct WriteHalf {
-    inner: Box<dyn AsyncWrite + Unpin + Send + Sync>,
-}
-
-impl IOStream for PlainStream {}
+pub struct WriteHalf<'a>(&'a UnsafeCell<PlainStream>);
 
 #[cfg(unix)]
 impl AsRawFd for PlainStream {
@@ -39,6 +34,14 @@ impl AsRawFd for PlainStream {
     }
 }
 
+impl AsRef<PlainStream> for ReadHalf<'_> {
+    fn as_ref(&self) -> &PlainStream { unsafe { &*self.0.get() } }
+}
+
+impl AsRef<PlainStream> for WriteHalf<'_> {
+    fn as_ref(&self) -> &PlainStream { unsafe { &*self.0.get() } }
+}
+
 impl PlainStream {
     pub fn set_no_delay(&self, nodelay: bool) -> Result<()> {
         match self {
@@ -48,80 +51,6 @@ impl PlainStream {
         }
     }
 }
-
-// 实现 AsyncRead 和 AsyncWrite 以支持 Tokio 的 split 方法
-impl AsyncRead for PlainStream {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> Poll<Result<()>> {
-        match self.get_mut() {
-            Self::TCP(stream) => Pin::new(stream).poll_read(cx, buf),
-            #[cfg(all(unix, feature = "uds"))]
-            Self::UDS(stream) => Pin::new(stream).poll_read(cx, buf),
-        }
-    }
-}
-
-impl AsyncWrite for PlainStream {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<Result<usize>> {
-        match self.get_mut() {
-            Self::TCP(stream) => Pin::new(stream).poll_write(cx, buf),
-            #[cfg(all(unix, feature = "uds"))]
-            Self::UDS(stream) => Pin::new(stream).poll_write(cx, buf),
-        }
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        match self.get_mut() {
-            Self::TCP(stream) => Pin::new(stream).poll_flush(cx),
-            #[cfg(all(unix, feature = "uds"))]
-            Self::UDS(stream) => Pin::new(stream).poll_flush(cx),
-        }
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        match self.get_mut() {
-            Self::TCP(stream) => Pin::new(stream).poll_shutdown(cx),
-            #[cfg(all(unix, feature = "uds"))]
-            Self::UDS(stream) => Pin::new(stream).poll_shutdown(cx),
-        }
-    }
-}
-
-impl AsyncRead for ReadHalf {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> Poll<Result<()>> {
-        Pin::new(&mut self.get_mut().inner).poll_read(cx, buf)
-    }
-}
-
-impl AsyncWrite for WriteHalf {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<Result<usize>> {
-        Pin::new(&mut self.get_mut().inner).poll_write(cx, buf)
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        Pin::new(&mut self.get_mut().inner).poll_flush(cx)
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        Pin::new(&mut self.get_mut().inner).poll_shutdown(cx)
-    }
-}
-
 
 #[cfg(target_os = "linux")]
 pub use linux_ext::*;
@@ -134,7 +63,8 @@ pub mod linux_ext {
 
     #[inline]
     pub fn split(x: &mut PlainStream) -> (ReadHalf, WriteHalf) {
-        (ReadHalf(&*x), WriteHalf(&*x))
+        let cell = UnsafeCell::new(x);
+        (ReadHalf(&cell), WriteHalf(&cell))
     }
 
     // tokio >= 1.9.0
@@ -174,5 +104,100 @@ pub mod linux_ext {
         let _ = try_io(x, interest, || {
             Err(Error::new(ErrorKind::WouldBlock, "")) as Result<()>
         });
+    }
+}
+
+impl AsyncRead for PlainStream {
+    #[inline]
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> Poll<Result<()>> {
+        match &mut self.get_mut() {
+            Self::TCP(x) => Pin::new(x).poll_read(cx, buf),
+            #[cfg(all(unix, feature = "uds"))]
+            Self::UDS(x) => Pin::new(x).poll_read(cx, buf),
+        }
+    }
+}
+
+impl AsyncRead for ReadHalf<'_> {
+    #[inline]
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> Poll<Result<()>> {
+        Pin::new(utils::const_cast(self.get_mut().0))
+            .poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for PlainStream {
+    #[inline]
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize>> {
+        match &mut self.get_mut() {
+            Self::TCP(x) => Pin::new(x).poll_write(cx, buf),
+            #[cfg(all(unix, feature = "uds"))]
+            Self::UDS(x) => Pin::new(x).poll_write(cx, buf),
+        }
+    }
+
+    #[inline]
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<()>> {
+        match &mut self.get_mut() {
+            Self::TCP(x) => Pin::new(x).poll_flush(cx),
+            #[cfg(all(unix, feature = "uds"))]
+            Self::UDS(x) => Pin::new(x).poll_flush(cx),
+        }
+    }
+
+    #[inline]
+    fn poll_shutdown(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<()>> {
+        match &mut self.get_mut() {
+            Self::TCP(x) => Pin::new(x).poll_shutdown(cx),
+            #[cfg(all(unix, feature = "uds"))]
+            Self::UDS(x) => Pin::new(x).poll_shutdown(cx),
+        }
+    }
+}
+
+impl AsyncWrite for WriteHalf<'_> {
+    #[inline]
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize>> {
+        Pin::new(utils::const_cast(self.get_mut().0))
+            .poll_write(cx, buf)
+    }
+
+    #[inline]
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<()>> {
+        Pin::new(utils::const_cast(self.get_mut().0)).poll_flush(cx)
+    }
+
+    #[inline]
+    fn poll_shutdown(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<()>> {
+        Pin::new(utils::const_cast(self.get_mut().0))
+            .poll_shutdown(cx)
     }
 }

@@ -10,13 +10,12 @@ where
     W: AsyncWrite + Unpin,
 {
     let mut buf = vec![0u8; BUF_SIZE];
-    let mut n: usize;
     loop {
-        n = r.read(&mut buf).await?;
+        let n = r.read(&mut buf).await?;
         if n == 0 {
             break;
-        };
-        w.write(&buf[..n]).await?;
+        }
+        w.write_all(&buf[..n]).await?;
     }
     w.shutdown().await?;
     Ok(())

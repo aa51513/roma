@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 use std::io::{Error, ErrorKind, Result};
 
 use log::debug;
-use http::{Uri};
+use http::Uri;
 use async_trait::async_trait;
 
 use tokio_tungstenite::tungstenite;
@@ -18,7 +18,7 @@ struct Request<'a> {
     pub host: &'a str,
 }
 
-impl<'a> tungstenite::client::IntoClientRequest for Request<'a> {
+impl tungstenite::client::IntoClientRequest for Request<'_> {
     fn into_client_request(
         self,
     ) -> tungstenite::error::Result<tungstenite::handshake::client::Request> {

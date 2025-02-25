@@ -9,7 +9,6 @@ use bytes::{Bytes, BytesMut};
 use tokio::io::{AsyncRead, AsyncWrite};
 use h2::{SendStream, RecvStream};
 
-use crate::transport::IOStream;
 use crate::utils::H2_BUF_SIZE;
 
 pub struct H2Stream {
@@ -28,8 +27,6 @@ impl H2Stream {
         }
     }
 }
-
-impl IOStream for H2Stream {}
 
 impl AsyncRead for H2Stream {
     #[inline]
