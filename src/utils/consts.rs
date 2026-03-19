@@ -12,12 +12,16 @@ pub const H2_BUF_SIZE: usize = 0x1000;
 pub const UDP_BUF_SIZE: usize = 0x800;
 #[cfg(feature = "tls")]
 pub const OCSP_BUF_SIZE: usize = 0x400;
+#[cfg(feature = "kcp")]
+pub const KCP_BUF_SIZE: usize = 0x800;
 #[cfg(target_os = "linux")]
 pub const PIPE_BUF_SIZE: usize = 0x10000;
 
 // timeout
 #[cfg(feature = "udp")]
 pub const UDP_TIMEOUT: u64 = 20;
+#[cfg(feature = "kcp")]
+pub const KCP_TIMEOUT: u64 = 30;
 
 // others
 pub const NOT_A_DNS_NAME: &str = "localhost";

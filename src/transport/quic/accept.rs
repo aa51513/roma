@@ -1,12 +1,11 @@
 use std::io::{Result, Error, ErrorKind};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use futures::StreamExt;
 
-use log::{warn, info, debug};
+use log::{debug};
 use async_trait::async_trait;
 
-use quinn::{NewConnection, Incoming, IncomingBiStreams};
+use quinn::{Endpoint};
 
 use super::QuicStream;
 use crate::utils::{self, CommonAddr};
@@ -14,12 +13,12 @@ use crate::transport::{AsyncConnect, AsyncAccept, Transport};
 
 pub struct Acceptor<C> {
     cc: Arc<C>,
-    lis: Incoming,
+    lis: Endpoint,
     addr: CommonAddr,
 }
 
 impl<C> Acceptor<C> {
-    pub fn new(cc: Arc<C>, lis: Incoming, addr: CommonAddr) -> Self {
+    pub fn new(cc: Arc<C>, lis: Endpoint, addr: CommonAddr) -> Self {
         Acceptor { cc, lis, addr }
     }
 }
@@ -40,7 +39,7 @@ impl AsyncAccept for Acceptor<()> {
     async fn accept_base(&self) -> Result<(Self::Base, SocketAddr)> {
         // new connection
         let lis = unsafe { utils::const_cast(&self.lis) };
-        let connecting = lis.next().await.ok_or_else(|| {
+        let connecting = lis.accept().await.ok_or_else(|| {
             Error::new(ErrorKind::ConnectionAborted, "connection abort")
         })?;
 
@@ -50,19 +49,15 @@ impl AsyncAccept for Acceptor<()> {
             Err(connecting) => connecting.await?,
         };
 
-        let NewConnection {
-            connection: x,
-            mut bi_streams,
-            ..
-        } = new_conn;
+        let new_quin_conn = new_conn.accept_bi().await;
 
-        debug!("quic accept[new] <- {}", &x.remote_address());
-
-        let (send, recv) = bi_streams.next().await.ok_or_else(|| {
-            Error::new(ErrorKind::Interrupted, "no more stream")
-        })??;
-
-        Ok((QuicStream::new(send, recv), x.remote_address()))
+        return match new_quin_conn {
+            Ok((send, recv)) => {
+                debug!("quic accept[new] <- {}", &new_conn.remote_address());
+                Ok((QuicStream::new(send, recv), new_conn.remote_address()))
+            }
+            Err(err) => { Err(Error::new(ErrorKind::Interrupted, err)) }
+        }
     }
 
     async fn accept(&self, base: Self::Base) -> Result<Self::IO> { Ok(base) }
@@ -87,7 +82,7 @@ where
     async fn accept_base(&self) -> Result<(Self::Base, SocketAddr)> {
         // new connection
         let lis = unsafe { utils::const_cast(&self.lis) };
-        let connecting = lis.next().await.ok_or_else(|| {
+        let connecting = lis.accept().await.ok_or_else(|| {
             Error::new(ErrorKind::ConnectionAborted, "connection abort")
         })?;
 
@@ -97,71 +92,29 @@ where
             Err(connecting) => connecting.await?,
         };
 
-        let NewConnection {
-            connection: x,
-            mut bi_streams,
-            ..
-        } = new_conn;
-
-        debug!("quic accept[new] <- {}", &x.remote_address());
-
-        let (send, recv) = bi_streams.next().await.ok_or_else(|| {
-            Error::new(ErrorKind::Interrupted, "no more stream")
-        })??;
-
-        tokio::spawn(handle_mux_conn(self.cc.clone(), bi_streams));
-        Ok((QuicStream::new(send, recv), x.remote_address()))
+        let new_quic_conn = new_conn.accept_bi().await;
+        match new_quic_conn{
+            Ok((send, recv)) => {
+                debug!("quic accept[new] <- {}", &new_conn.remote_address());
+                Ok((QuicStream::new(send, recv), new_conn.remote_address()))
+            }
+            Err(err) => {
+                Err(Error::new(ErrorKind::Interrupted, err))
+            }
+        }
     }
 
     async fn accept(&self, base: Self::Base) -> Result<Self::IO> { Ok(base) }
 }
 
-async fn handle_mux_conn<C>(cc: Arc<C>, mut bi_streams: IncomingBiStreams)
-where
-    C: AsyncConnect + 'static,
-{
-    use crate::io::bidi_copy_with_stream;
-
-    loop {
-        match bi_streams.next().await {
-            Some(x) => match x {
-                Ok((send, recv)) => {
-                    info!(
-                        "new quic stream[reuse] <-> {}[{}]",
-                        cc.addr(),
-                        C::SCHEME
-                    );
-                    tokio::spawn(bidi_copy_with_stream(
-                        cc.clone(),
-                        QuicStream::new(send, recv),
-                    ));
-                }
-                Err(e) => {
-                    warn!("failed to resolve quic-mux stream, {}", e);
-                    return;
-                }
-            },
-            None => warn!("no more quic-mux stream"),
-        }
-    }
-    /*
-    while let Some(Ok((send, recv))) = bi_streams.next().await {
-        tokio::spawn(bidi_copy_with_stream(
-            cc.clone(),
-            QuicStream::new(send, recv),
-        ));
-    }
-    */
-}
-
 // Raw Acceptor, used to setup the Quic Acceptor above
 pub struct RawAcceptor {
-    lis: Incoming,
+    lis: Endpoint,
     addr: CommonAddr,
 }
 
 impl RawAcceptor {
-    pub fn new(lis: Incoming, addr: CommonAddr) -> Self {
+    pub fn new(lis: Endpoint, addr: CommonAddr) -> Self {
         RawAcceptor { lis, addr }
     }
     pub fn set_connector<C>(self, cc: Arc<C>) -> Acceptor<C> {
@@ -184,7 +137,7 @@ impl AsyncAccept for RawAcceptor {
     async fn accept_base(&self) -> Result<(Self::Base, SocketAddr)> {
         // new connection
         let lis = unsafe { utils::const_cast(&self.lis) };
-        let connecting = lis.next().await.ok_or_else(|| {
+        let connecting = lis.accept().await.ok_or_else(|| {
             Error::new(ErrorKind::ConnectionAborted, "connection abort")
         })?;
 
@@ -194,17 +147,15 @@ impl AsyncAccept for RawAcceptor {
             Err(connecting) => connecting.await?,
         };
 
-        let NewConnection {
-            connection: x,
-            mut bi_streams,
-            ..
-        } = new_conn;
-
-        let (send, recv) = bi_streams.next().await.ok_or_else(|| {
-            Error::new(ErrorKind::Interrupted, "no more stream")
-        })??;
-
-        Ok((QuicStream::new(send, recv), x.remote_address()))
+        let new_quic_conn = new_conn.accept_bi().await;
+        match new_quic_conn {
+            Ok((send, recv)) => {
+                Ok((QuicStream::new(send, recv), new_conn.remote_address()))
+            }
+            Err(err) => {
+                Err(Error::new(ErrorKind::Interrupted, err))
+            }
+        }
     }
 
     async fn accept(&self, base: Self::Base) -> Result<Self::IO> { Ok(base) }

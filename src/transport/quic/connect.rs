@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use log::{debug, trace};
 use async_trait::async_trait;
 use quinn::Connection;
-use quinn::{Endpoint, NewConnection};
+use quinn::{Endpoint};
 
 use super::QuicStream;
 use crate::dns;
@@ -106,13 +106,9 @@ async fn new_client(cc: &Connector) -> Result<Connection> {
         Err(connecting) => connecting.await?,
     };
 
-    let NewConnection {
-        connection: client, ..
-    } = new_conn;
-
     // store connection
     // may have conflicts
     cc.count.store(1, Ordering::Relaxed);
-    *cc.channel.write().unwrap() = Some(client.clone());
-    Ok(client)
+    *cc.channel.write().unwrap() = Some(new_conn.clone());
+    Ok(new_conn)
 }

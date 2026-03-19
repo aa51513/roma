@@ -87,6 +87,8 @@ pub mod udp_ext {
 use quic_ext::*;
 #[cfg(feature = "quic")]
 pub mod quic_ext {
+    use std::fs;
+    use std::io::BufReader;
     use super::*;
     use quinn::{Endpoint, ClientConfig, ServerConfig};
     use crate::utils;
@@ -135,9 +137,50 @@ pub mod quic_ext {
         //builder.default_client_config(client_config);
         //let (ep, _) = must!(builder.bind(&bind_addr), "bind {}", &bind_addr);
 
-        let mut ep: Endpoint = Endpoint::client(bind_addr).expect("address error");
+        let mut ep: Endpoint =
+            Endpoint::client(bind_addr).expect("address error");
         ep.set_default_client_config(client_config);
         quic::Connector::new(ep, sockaddr, sni, trans.mux)
+    }
+
+    fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
+        let certfile =
+            fs::File::open(filename).expect("cannot open certificate file");
+        let mut reader = BufReader::new(certfile);
+        rustls_pemfile::certs(&mut reader)
+            .unwrap()
+            .iter()
+            .map(|v| rustls::Certificate(v.clone()))
+            .collect()
+    }
+
+    fn load_private_key(filename: &str) -> rustls::PrivateKey {
+        let keyfile =
+            fs::File::open(filename).expect("cannot open private key file");
+        let mut reader = BufReader::new(keyfile);
+
+        loop {
+            match rustls_pemfile::read_one(&mut reader)
+                .expect("cannot parse private key .pem file")
+            {
+                Some(rustls_pemfile::Item::RSAKey(key)) => {
+                    return rustls::PrivateKey(key)
+                }
+                Some(rustls_pemfile::Item::PKCS8Key(key)) => {
+                    return rustls::PrivateKey(key)
+                }
+                Some(rustls_pemfile::Item::ECKey(key)) => {
+                    return rustls::PrivateKey(key)
+                }
+                None => break,
+                _ => {}
+            }
+        }
+
+        panic!(
+            "no keys found in {:?} (encrypted keys not supported)",
+            filename
+        );
     }
 
     pub fn new_quic_raw_lis(
@@ -163,15 +206,37 @@ pub mod quic_ext {
             _ => unreachable!(),
         };
 
-        let certs =
-            must!(utils::load_certs(&tlsc.cert), "load {}", &tlsc.cert);
-        let mut keys =
-            must!(utils::load_keys(&tlsc.key), "load {}", &tlsc.key);
-        let key = keys.remove(0);
-        let server_config = ServerConfig::with_single_cert(certs,key).expect("bad cert file");
-        let (_, incoming) = Endpoint::server(server_config, *bind_addr).expect("failed to bind");
+        let certs: Vec<rustls::Certificate> = load_certs(&tlsc.cert);
+        let key: rustls::PrivateKey = load_private_key(&tlsc.key);
+
+        let server_config =
+            ServerConfig::with_single_cert(certs, key).expect("bad cert file");
+        let endpoint = Endpoint::server(server_config, *bind_addr)
+            .expect("failed to bind");
         info!("bind {}[quic]", &bind_addr);
-        quic::RawAcceptor::new(incoming, sockaddr)
+        quic::RawAcceptor::new(endpoint, sockaddr)
+    }
+}
+
+// ===== KCP =====
+#[cfg(feature = "kcp")]
+use kcp_ext::*;
+#[cfg(feature = "kcp")]
+pub mod kcp_ext {
+    use super::*;
+    use futures::executor::block_on;
+    use crate::transport::kcp;
+    use crate::utils::CommonAddr::*;
+
+    pub fn new_kcp_conn(addr: &str, _: &NetConfig) -> kcp::Connector {
+        let (sockaddr, _) = must!(common::parse_socket_addr(addr, true));
+        kcp::Connector::new(sockaddr)
+    }
+
+    pub fn new_kcp_lis(addr: &str, _: &NetConfig) -> kcp::Acceptor {
+        let (sockaddr, _) = must!(common::parse_socket_addr(addr, false));
+        info!("bind {}[kcp]", &sockaddr);
+        block_on(kcp::Acceptor::new(sockaddr)).unwrap()
     }
 }
 
@@ -186,6 +251,8 @@ pub fn spawn_lis_half_with_net<C>(
     use NetConfig::*;
     #[cfg(feature = "quic")]
     use crate::config::TransportConfig::QUIC;
+    #[cfg(feature = "kcp")]
+    use crate::config::TransportConfig::KCP;
 
     debug!("load listen network[{}]", &listen.net);
 
@@ -212,6 +279,11 @@ pub fn spawn_lis_half_with_net<C>(
             ));
             transport::spawn_with_trans(workers, listen, remote, lis, conn)
         }
+        #[cfg(feature = "kcp")]
+        UDP if matches!(listen.trans, KCP(_)) => {
+            let lis = MaybeQuic::Other(new_kcp_lis(&listen.addr, &listen.net));
+            transport::spawn_with_trans(workers, listen, remote, lis, conn)
+        }
         #[cfg(feature = "udp")]
         UDP => {
             let lis = MaybeQuic::Other(new_udp_lis(&listen.addr, &listen.net));
@@ -228,6 +300,8 @@ pub fn spawn_conn_half_with_net(
     use NetConfig::*;
     #[cfg(feature = "quic")]
     use crate::config::TransportConfig::QUIC;
+    #[cfg(feature = "kcp")]
+    use crate::config::TransportConfig::KCP;
 
     debug!("load remote network[{}]", &remote.net);
 
@@ -249,6 +323,11 @@ pub fn spawn_conn_half_with_net(
                 &remote.trans,
                 &remote.tls,
             );
+            spawn_lis_half_with_net(workers, listen, remote, conn)
+        }
+        #[cfg(feature = "kcp")]
+        UDP if matches!(&remote.trans, KCP(_)) => {
+            let conn = new_kcp_conn(&remote.addr, &remote.net);
             spawn_lis_half_with_net(workers, listen, remote, conn)
         }
         #[cfg(feature = "udp")]

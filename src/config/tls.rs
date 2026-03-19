@@ -39,8 +39,7 @@ pub mod enable_tls {
     use std::sync::Arc;
 
     use webpki::DnsNameRef;
-    use rustls::{ClientConfig, ServerConfig};
-    use rustls::internal::msgs::enums::ProtocolVersion;
+    use rustls::{ClientConfig, ServerConfig, SupportedProtocolVersion};
 
     use crate::utils::{self, must, CommonAddr, NOT_A_DNS_NAME};
     use crate::transport::tls;
@@ -75,6 +74,9 @@ pub mod enable_tls {
         // native, firefox, or provide a file
         #[serde(default = "def_roots_str")]
         pub roots: String,
+
+        #[serde(default)]
+        pub suites: Vec<String>,
     }
 
     struct ClientSkipVerify;
@@ -123,10 +125,20 @@ pub mod enable_tls {
         }
     }
 
-    fn make_client_config(config: &TLSClientConfig) -> ClientConfig {
-        let client_config_builder = rustls::ClientConfig::builder()
-            .with_safe_defaults();
+    /// Find a ciphersuite with the given name
+    fn find_suite(name: &str) -> Option<rustls::SupportedCipherSuite> {
+        for suite in rustls::ALL_CIPHER_SUITES {
+            let sname = format!("{:?}", suite.suite()).to_lowercase();
 
+            if sname == name.to_string().to_lowercase() {
+                return Some(*suite);
+            }
+        }
+        None
+    }
+
+    fn make_client_config(config: &TLSClientConfig) -> ClientConfig {
+        //load tls trust certs
         let mut root_store = rustls::RootCertStore::empty();
         // configure the validator
         match config.roots.as_str() {
@@ -165,26 +177,46 @@ pub mod enable_tls {
                  root_store.add_parsable_certificates(&*self_certs);
             }
         };
-        // cert set end
-        let client_config_builder = client_config_builder.with_root_certificates(root_store);
 
-        let mut client_config =   client_config_builder.with_no_client_auth();
+        // set tls version ,the same as alpns
+        let versions = if !config.versions.is_empty() {
+            let versions = config.versions.iter()
+                .map(|x| match x.as_str() {
+                    "tlsv1.2" => &rustls::version::TLS12,
+                    "tlsv1.3" => &rustls::version::TLS13,
+                    other => panic!("cannot look up version '{}', valid are 'tlsv1.2' and 'tlsv1.3'",other),
+                }).collect();
+            versions
+        } else {
+            rustls::DEFAULT_VERSIONS.to_vec()
+        };
+
+        let suites = if !config.suites.is_empty() {
+            let suites = config.suites.iter()
+                .filter_map(|x| match x.as_str() {
+                    any => find_suite(any),
+                }).collect();
+            suites
+        } else {
+            rustls::DEFAULT_CIPHER_SUITES.to_vec()
+        };
+
+        let mut client_config = rustls::ClientConfig::builder()
+            .with_cipher_suites(&suites)
+            .with_safe_default_kx_groups()
+            .with_protocol_versions(&versions)
+            .expect("inconsistent cipher-suite/versions selected")
+            .with_root_certificates(root_store).with_no_client_auth();
+
         client_config.enable_sni = config.enable_sni;
         client_config.enable_early_data = config.enable_early_data;
+
         // if not specified, use the constructor's default value
         if !config.alpns.is_empty() {
             client_config.alpn_protocols =
                 config.alpns.iter().map(|x| x.as_bytes().to_vec()).collect();
         };
-        // the same as alpns
-        if !config.versions.is_empty() {
-            let _ = config.versions.iter()
-                .map(|x| match x.as_str() {
-                    "tlsv1.2" => client_config.supports_version(ProtocolVersion::TLSv1_2),
-                    "tlsv1.3" => client_config.supports_version(ProtocolVersion::TLSv1_3),
-                    _ => panic!("unknown ssl version"),
-                });
-        };
+
         // skip verify
         if config.skip_verify {
             client_config.dangerous()
@@ -192,8 +224,7 @@ pub mod enable_tls {
             return client_config;
         };
 
-
-        client_config
+        return client_config;
     }
 
     // TLS Server
@@ -211,6 +242,9 @@ pub mod enable_tls {
 
         #[serde(default)]
         pub ocsp: String,
+
+        #[serde(default)]
+        pub suites: Vec<String>,
     }
 
     use crate::utils::MaybeQuic;
@@ -236,9 +270,6 @@ pub mod enable_tls {
     }
 
     fn make_server_config(config: &TLSServerConfig) -> ServerConfig {
-        let server_config_builder = rustls::ServerConfig::builder()
-            .with_safe_defaults().with_no_client_auth();
-
         let (certs, key) = if config.cert == config.key {
             must!(utils::generate_cert_key(&config.cert))
         } else {
@@ -248,9 +279,39 @@ pub mod enable_tls {
                 must!(utils::load_keys(&config.key), "load {}", &config.key);
             (certs, keys.remove(0))
         };
-        let mut server_config;
+
+        // set tls version ,the same as alpns
+        let versions = if !config.versions.is_empty() {
+            let versions: Vec<&SupportedProtocolVersion> = config.versions.iter()
+                .map(|x| match x.as_str() {
+                    "tlsv1.2" => &rustls::version::TLS12,
+                    "tlsv1.3" => &rustls::version::TLS13,
+                    other => panic!("cannot look up version '{}', valid are 'tlsv1.2' and 'tlsv1.3'",other),
+                }).collect();
+            versions
+        } else {
+            rustls::DEFAULT_VERSIONS.to_vec()
+        };
+
+        let suites = if !config.suites.is_empty() {
+            let suites = config.suites.iter()
+                .filter_map(|x| match x.as_str() {
+                    any => find_suite(any),
+                }).collect();
+            suites
+        } else {
+            rustls::DEFAULT_CIPHER_SUITES.to_vec()
+        };
+
+        let server_config_builder = rustls::ServerConfig::builder()
+            .with_cipher_suites(&suites)
+            .with_safe_default_kx_groups()
+            .with_protocol_versions(&versions)
+            .expect("inconsistent cipher-suites/versions specified")
+            .with_no_client_auth();
 
         let mut ocsp = vec![0u8];
+        let mut server_config;
         if !config.ocsp.is_empty() {
             ocsp.reserve(utils::OCSP_BUF_SIZE);
             let mut r = BufReader::new(must!(
@@ -268,15 +329,6 @@ pub mod enable_tls {
         if !config.alpns.is_empty() {
             server_config.alpn_protocols =
                 config.alpns.iter().map(|x| x.as_bytes().to_vec()).collect();
-        };
-        // the same as alpns
-        if !config.versions.is_empty() {
-            let _ = config.versions.iter()
-                .map(|x| match x.as_str() {
-                    "tlsv1.2" => server_config.supports_version(ProtocolVersion::TLSv1_2),
-                    "tlsv1.3" => server_config.supports_version(ProtocolVersion::TLSv1_3),
-                    _ => panic!("unknown ssl version"),
-                });
         };
 
         server_config

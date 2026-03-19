@@ -16,10 +16,14 @@ pub enum TransportConfig {
     H2(HTTP2Config),
     #[cfg(feature = "quic")]
     QUIC(QuicConfig),
+    #[cfg(feature = "kcp")]
+    KCP(KcpConfig),
 }
 
 impl Default for TransportConfig {
-    fn default() -> Self { Self::Plain }
+    fn default() -> Self {
+        Self::Plain
+    }
 }
 
 impl Display for TransportConfig {
@@ -33,6 +37,8 @@ impl Display for TransportConfig {
             H2(_) => write!(f, "h2c"),
             #[cfg(feature = "quic")]
             QUIC(_) => write!(f, "quic"),
+            #[cfg(feature = "kcp")]
+            KCP(_) => write!(f, "kcp"),
         }
     }
 }
@@ -65,6 +71,42 @@ pub struct QuicConfig {
     pub mux: usize,
 }
 
+#[cfg(feature = "kcp")]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct KcpConfig {
+    #[serde(default = "default_kcp_nodelay")]
+    pub nodelay: i32,
+
+    #[serde(default = "default_kcp_interval")]
+    pub interval: i32,
+
+    #[serde(default = "default_kcp_resend")]
+    pub resend: i32,
+
+    #[serde(default = "default_kcp_nc")]
+    pub nc: bool,
+}
+
+#[cfg(feature = "kcp")]
+fn default_kcp_nodelay() -> i32 {
+    1
+}
+
+#[cfg(feature = "kcp")]
+fn default_kcp_interval() -> i32 {
+    20
+}
+
+#[cfg(feature = "kcp")]
+fn default_kcp_resend() -> i32 {
+    2
+}
+
+#[cfg(feature = "kcp")]
+fn default_kcp_nc() -> bool {
+    false
+}
+
 // ===== Loaders =====
 #[cfg(feature = "ws")]
 use crate::transport::ws;
@@ -82,7 +124,7 @@ where
     }
 
     fn apply_to_conn(&self, conn: C) -> Self::Connector {
-        ws::Connector::new(conn, self.path.clone(),self.host.clone())
+        ws::Connector::new(conn, self.path.clone(), self.host.clone())
     }
 
     fn apply_to_lis_with_conn(&self, _: Arc<C>, _: L) -> Self::Acceptor {
@@ -101,7 +143,9 @@ where
     type Acceptor = h2::Acceptor<L, C>;
     type Connector = h2::Connector<C>;
 
-    fn apply_to_lis(&self, _: L) -> Self::Acceptor { unreachable!() }
+    fn apply_to_lis(&self, _: L) -> Self::Acceptor {
+        unreachable!()
+    }
 
     fn apply_to_conn(&self, conn: C) -> Self::Connector {
         h2::Connector::new(conn, self.path.clone(), self.server_push, self.mux)

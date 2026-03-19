@@ -62,6 +62,12 @@ fn spawn_lis_half_with_trans<L, C>(
             let lis = lis.take_quic().unwrap().set_connector(conn.clone());
             workers.push(tokio::spawn(proxy(Arc::new(lis), conn)));
         }
+        // kcp does not need extra configuration
+        #[cfg(feature = "kcp")]
+        KCP(_) => {
+            let lis = lis.take_other().unwrap();
+            workers.push(tokio::spawn(proxy(Arc::new(lis), Arc::new(conn))));
+        }
     }
 }
 
@@ -98,6 +104,11 @@ fn spawn_conn_half_with_trans<L, C>(
         // quic does not need extra configuration
         #[cfg(feature = "quic")]
         QUIC(_) => {
+            spawn_lis_half_with_trans(workers, lis_trans, lis, conn);
+        }
+        // kcp does not need extra configuration
+        #[cfg(feature = "kcp")]
+        KCP(_) => {
             spawn_lis_half_with_trans(workers, lis_trans, lis, conn);
         }
     }

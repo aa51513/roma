@@ -1,5 +1,5 @@
 [package]
-edition = "2018"
+edition = "2021"
 name = "roma"
 version = "0.6.4"
 authors = ["aa51513 <aa51513@github.com>"]
@@ -14,13 +14,14 @@ opt-level = 0
 
 [features]
 default = ["full"]
-full = ["uds", "tls", "ws", "h2c", "udp", "quic"]
+full = ["uds", "tls", "ws", "h2c", "udp", "quic", "kcp"]
 uds = []
 tls = ["rustls", "tokio-rustls", "webpki", "webpki-roots", "rcgen", "rustls-native-certs"]
 ws = ["tokio-tungstenite", "http"]
 h2c = ["h2", "http"]
 udp = ["tokio/sync", "tokio/time"]
 quic = ["udp", "tls", "quinn"]
+kcp = ["udp", "dep:kcp-tokio"]
 
 [dependencies]
 # common
@@ -40,7 +41,7 @@ serde_json = "1"
 
 # log
 log = "0.4"
-env_logger = "0.9"
+env_logger = "0.10.0"
 
 # rt
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "io-util", "net"] }
@@ -51,20 +52,23 @@ trust-dns-resolver = "0.22.0"
 # tls
 rcgen = { version = "0.10", optional = true }
 webpki = { version = "0.22", optional = true }
-webpki-roots = { version = "0.22", optional = true }
+webpki-roots = { version = "0.23.0", optional = true }
 rustls-native-certs = { version = "0.6", optional = true }
-tokio-rustls = { version = "0.23", optional = true }
-rustls = { version = "0.20", features = ["dangerous_configuration", "quic"], optional = true }
+tokio-rustls = { version = "0.23.4", optional = true }
+rustls = { version = "0.20.8", features = ["dangerous_configuration", "quic"], optional = true }
 rustls-pemfile = "1"
 
 # ws
-tokio-tungstenite = { version = "0.17", optional = true }
+tokio-tungstenite = { version = "0.18.0", optional = true }
 httparse = "1.8"
 
 # h2
 h2 = { version = "0.3", optional = true }
 
 # quic
-quinn = { version = "0.8", default-features = true, features = ["rustls","native-certs","ring"], optional = true }
+quinn = { version = "0.9.3", default-features = true, features = ["rustls","native-certs","ring"], optional = true }
+
+# kcp
+kcp-tokio = { version = "0.4", optional = true }
 
 

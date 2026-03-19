@@ -21,6 +21,9 @@ pub mod udp;
 #[cfg(feature = "quic")]
 pub mod quic;
 
+#[cfg(feature = "kcp")]
+pub mod kcp;
+
 trait IOStream: AsyncRead + AsyncWrite + Send + Sync + Unpin {}
 
 #[allow(clippy::upper_case_acronyms)]
@@ -31,6 +34,7 @@ pub enum Transport {
     H2,
     UDP,
     QUIC,
+    KCP,
 }
 
 #[async_trait]
