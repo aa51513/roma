@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::io::Result;
+use std::cell::UnsafeCell;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
 
@@ -10,7 +11,6 @@ use tokio::net::TcpStream;
 use tokio::net::UnixStream;
 
 use crate::utils;
-use crate::transport::IOStream;
 
 #[allow(clippy::upper_case_acronyms)]
 pub enum PlainStream {
@@ -19,11 +19,9 @@ pub enum PlainStream {
     UDS(UnixStream),
 }
 
-pub struct ReadHalf<'a>(&'a PlainStream);
+pub struct ReadHalf<'a>(&'a UnsafeCell<PlainStream>);
 
-pub struct WriteHalf<'a>(&'a PlainStream);
-
-impl IOStream for PlainStream {}
+pub struct WriteHalf<'a>(&'a UnsafeCell<PlainStream>);
 
 #[cfg(unix)]
 impl AsRawFd for PlainStream {
@@ -37,11 +35,11 @@ impl AsRawFd for PlainStream {
 }
 
 impl AsRef<PlainStream> for ReadHalf<'_> {
-    fn as_ref(&self) -> &PlainStream { self.0 }
+    fn as_ref(&self) -> &PlainStream { unsafe { &*self.0.get() } }
 }
 
 impl AsRef<PlainStream> for WriteHalf<'_> {
-    fn as_ref(&self) -> &PlainStream { self.0 }
+    fn as_ref(&self) -> &PlainStream { unsafe { &*self.0.get() } }
 }
 
 impl PlainStream {
@@ -65,7 +63,8 @@ pub mod linux_ext {
 
     #[inline]
     pub fn split(x: &mut PlainStream) -> (ReadHalf, WriteHalf) {
-        (ReadHalf(&*x), WriteHalf(&*x))
+        let cell = UnsafeCell::new(x);
+        (ReadHalf(&cell), WriteHalf(&cell))
     }
 
     // tokio >= 1.9.0
@@ -130,7 +129,7 @@ impl AsyncRead for ReadHalf<'_> {
         cx: &mut Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> Poll<Result<()>> {
-        Pin::new(unsafe { utils::const_cast(self.get_mut().0) })
+        Pin::new(utils::const_cast(self.get_mut().0))
             .poll_read(cx, buf)
     }
 }
@@ -181,7 +180,7 @@ impl AsyncWrite for WriteHalf<'_> {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize>> {
-        Pin::new(unsafe { utils::const_cast(self.get_mut().0) })
+        Pin::new(utils::const_cast(self.get_mut().0))
             .poll_write(cx, buf)
     }
 
@@ -190,7 +189,7 @@ impl AsyncWrite for WriteHalf<'_> {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Result<()>> {
-        Pin::new(unsafe { utils::const_cast(self.get_mut().0) }).poll_flush(cx)
+        Pin::new(utils::const_cast(self.get_mut().0)).poll_flush(cx)
     }
 
     #[inline]
@@ -198,7 +197,7 @@ impl AsyncWrite for WriteHalf<'_> {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Result<()>> {
-        Pin::new(unsafe { utils::const_cast(self.get_mut().0) })
+        Pin::new(utils::const_cast(self.get_mut().0))
             .poll_shutdown(cx)
     }
 }

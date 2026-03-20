@@ -174,7 +174,7 @@ pub mod enable_tls {
                         "open {}",
                         file_path
                     ))).expect("read self_certs failed");
-                 root_store.add_parsable_certificates(&*self_certs);
+                 root_store.add_parsable_certificates(&self_certs);
             }
         };
 

@@ -1,80 +1,128 @@
-name: release
+name: Release
+
 on:
   push:
     tags:
       - 'v*.*.*'
 
+permissions:
+  contents: write
+
 jobs:
-  release-corss:
-    runs-on: ubuntu-latest
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - x86_64-unknown-linux-musl
-          - x86_64-pc-windows-gnu
         include:
-          - target: x86_64-unknown-linux-gnu
-            output: roma
-          - target: x86_64-unknown-linux-musl
-            output: roma
-          - target: x86_64-pc-windows-gnu
-            output: roma.exe
+          - name: Linux x86_64
+            os: ubuntu-20.04
+            target: x86_64-unknown-linux-gnu
+            artifact: roma-linux-x86_64
+            archive: tar.gz
+
+          - name: Linux musl x86_64
+            os: ubuntu-20.04
+            target: x86_64-unknown-linux-musl
+            artifact: roma-linux-musl-x86_64
+            archive: tar.gz
+            apt_packages: musl-tools
+
+          - name: Windows x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: roma-windows-x86_64
+            archive: zip
+            exe_suffix: .exe
+
+          - name: Darwin x86_64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: roma-darwin-x86_64
+            archive: zip
+
+          - name: Darwin Aarch64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: roma-darwin-aarch64
+            archive: zip
+
+          - name: Linux ARMv7
+            os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            artifact: roma-linux-armv7
+            archive: tar.gz
+            use_cross: true
+
+          - name: Linux Aarch64
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact: roma-linux-aarch64
+            archive: tar.gz
+            use_cross: true
+
+          - name: Linux musl Aarch64
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            artifact: roma-linux-musl-aarch64
+            archive: tar.gz
+            use_cross: true
+
+    defaults:
+      run:
+        shell: bash
+
     steps:
-      - uses: actions/checkout@v2
-      - name: install toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          override: true
-      - name: compile
-        uses: actions-rs/cargo@v1
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
         with:
-          use-cross: true
-          command: build
-          args: --release --target=${{ matrix.target }}
-      - name: pack
+          key: ${{ matrix.target }}
+
+      - name: Install apt packages
+        if: ${{ matrix.apt_packages != '' && matrix.apt_packages != null }}
+        run: sudo apt-get update && sudo apt-get install -y ${{ matrix.apt_packages }}
+
+      - name: Install cross
+        if: ${{ matrix.use_cross }}
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build
         run: |
-          mkdir -p release-${{ matrix.target }}
-          cd release-${{ matrix.target }}
-          tar -C ../target/${{ matrix.target }}/release -zcf roma-${{ matrix.target }}.tar.gz ${{ matrix.output }}
-          sha256sum roma-${{ matrix.target }}.tar.gz > roma-${{ matrix.target }}.sha256
-      - name: release
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          files: release-${{ matrix.target }}/*
-  release-apple:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        target:
-          - x86_64-apple-darwin
-    steps:
-      - uses: actions/checkout@v2
-      - name: install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          override: true
-      - name: compile
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: false
-          command: build
-          args: --release --target=${{ matrix.target }}
-      - name: pack
+          BUILD_CMD=$( [ "${{ matrix.use_cross }}" = "true" ] && echo "cross" || echo "cargo" )
+          $BUILD_CMD build --all-features --release --target ${{ matrix.target }}
+
+      - name: Package artifacts
         run: |
-          mkdir -p release-${{ matrix.target }}
-          cd release-${{ matrix.target }}
-          tar -C ../target/${{ matrix.target }}/release/ -zcf roma-${{ matrix.target }}.tar.gz roma
-          shasum -a 256 roma-${{ matrix.target }}.tar.gz > roma-${{ matrix.target }}.sha256
-      - name: release
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT="${{ matrix.artifact }}"
+          BIN_DIR="target/${{ matrix.target }}/release"
+          EXE="${{ matrix.exe_suffix }}"
+
+          mkdir -p "$ARTIFACT"
+          mv "${BIN_DIR}/romac${EXE}" "./${ARTIFACT}/"
+          mv "${BIN_DIR}/romad${EXE}" "./${ARTIFACT}/"
+
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              7z a "${ARTIFACT}.zip" "./${ARTIFACT}/"
+            else
+              zip -r "${ARTIFACT}.zip" "./${ARTIFACT}/"
+            fi
+          else
+            tar zcf "${ARTIFACT}.tar.gz" "./${ARTIFACT}/"
+          fi
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          files: release-${{ matrix.target }}/*
+          files: ${{ matrix.artifact }}.${{ matrix.archive }}

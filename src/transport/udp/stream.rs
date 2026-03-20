@@ -12,7 +12,6 @@ use tokio::net::UdpSocket;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc::Receiver;
 
-use crate::transport::IOStream;
 use crate::utils::UDP_BUF_SIZE;
 
 pub struct UdpClientStream {
@@ -26,9 +25,6 @@ pub struct UdpServerStream {
     buffer: BytesMut,
     remote: SocketAddr,
 }
-
-impl IOStream for UdpClientStream {}
-impl IOStream for UdpServerStream {}
 
 impl UdpClientStream {
     #[inline]

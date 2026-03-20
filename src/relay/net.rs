@@ -211,10 +211,10 @@ pub mod quic_ext {
 
         let server_config =
             ServerConfig::with_single_cert(certs, key).expect("bad cert file");
-        let endpoint = Endpoint::server(server_config, *bind_addr)
+        let (_, incoming) = Endpoint::server(server_config, *bind_addr)
             .expect("failed to bind");
         info!("bind {}[quic]", &bind_addr);
-        quic::RawAcceptor::new(endpoint, sockaddr)
+        quic::RawAcceptor::new(incoming, sockaddr)
     }
 }
 

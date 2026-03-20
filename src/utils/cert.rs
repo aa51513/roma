@@ -25,9 +25,7 @@ pub fn load_certs(path: &str) -> Result<Vec<Certificate>> {
         let mut certificates = Vec::<Certificate>::new();
         for item in items {
             match item {
-                Item::X509Certificate(cert) => certificates.push(Certificate{
-                    0:cert,
-                }),
+                Item::X509Certificate(cert) => certificates.push(Certificate(cert)),
                 _ => println!("unhandled Certificate item"),
             }
         }
@@ -42,15 +40,9 @@ pub fn load_keys(path: &str) -> Result<Vec<PrivateKey>> {
         let mut certificates = Vec::<PrivateKey>::new();
         for item in items {
             match item {
-                Item::RSAKey(key) => certificates.push(PrivateKey{
-                    0:key,
-                }),
-                Item::PKCS8Key(key) => certificates.push(PrivateKey{
-                    0:key,
-                }),
-                Item::ECKey(key) => certificates.push(PrivateKey{
-                    0:key,
-                }),
+                Item::RSAKey(key) => certificates.push(PrivateKey(key)),
+                Item::PKCS8Key(key) => certificates.push(PrivateKey(key)),
+                Item::ECKey(key) => certificates.push(PrivateKey(key)),
                 _ => println!("unhandled PrivateKey item"),
             }
         }
