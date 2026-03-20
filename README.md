@@ -23,8 +23,8 @@
 - [x] [TLS][tls-doc-url]
 - [x] [WebSocket][ws-doc-url]
 - [x] [HTTP2][h2-doc-url]
-- [ ] KCP
-- [ ] gRPC
+- [x] [KCP][kcp-doc-url]
+- [x] [gRPC][grpc-doc-url]
 - [x] [QUIC][quic-doc-url]
 
 [doc-url]: https://github.com/aa51513/roma/tree/master/docs
@@ -41,6 +41,10 @@
 
 [h2-doc-url]: https://github.com/aa51513/roma/blob/master/docs/h2.md
 
+[kcp-doc-url]: https://github.com/aa51513/roma/blob/master/docs/kcp.md
+
+[grpc-doc-url]: https://github.com/aa51513/roma/blob/master/docs/grpc.md
+
 [quic-doc-url]: https://github.com/aa51513/roma/blob/master/docs/quic.md
 
 ## Build
@@ -56,6 +60,8 @@ cargo build --release
 - `ws` -- enable websocket
 - `h2c` -- enable http2
 - `quic` -- enable quic
+- `kcp` -- enable kcp (reliable udp protocol)
+- `grpc` -- enable gRPC (based on http2)
 - `full` -- enable all above (*default*)
 ```shell
 # tcp only
