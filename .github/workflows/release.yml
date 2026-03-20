@@ -109,8 +109,7 @@ jobs:
           EXE="${{ matrix.exe_suffix }}"
 
           mkdir -p "$ARTIFACT"
-          mv "${BIN_DIR}/romac${EXE}" "./${ARTIFACT}/"
-          mv "${BIN_DIR}/romad${EXE}" "./${ARTIFACT}/"
+          mv "${BIN_DIR}/roma${EXE}" "./${ARTIFACT}/"
 
           if [ "${{ matrix.archive }}" = "zip" ]; then
             if [ "$RUNNER_OS" = "Windows" ]; then
