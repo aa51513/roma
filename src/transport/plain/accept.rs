@@ -53,6 +53,7 @@ impl PlainListener {
 
 pub struct Acceptor {
     lis: PlainListener,
+    #[allow(dead_code)]
     addr: CommonAddr,
 }
 

@@ -226,7 +226,6 @@ pub mod kcp_ext {
     use super::*;
     use futures::executor::block_on;
     use crate::transport::kcp;
-    use crate::utils::CommonAddr::*;
 
     pub fn new_kcp_conn(addr: &str, _: &NetConfig) -> kcp::Connector {
         let (sockaddr, _) = must!(common::parse_socket_addr(addr, true));

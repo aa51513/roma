@@ -20,12 +20,17 @@ pub fn generate_cert_key(
 }
 
 pub fn load_certs(path: &str) -> Result<Vec<Certificate>> {
-    let items: Vec<Item>  = rustls_pemfile::read_all(&mut BufReader::new(File::open(path)?)).map_err(|_| CertError::LoadCertificate).expect("TODO: panic message");
+    let items: Vec<Item> =
+        rustls_pemfile::read_all(&mut BufReader::new(File::open(path)?))
+            .map_err(|_| CertError::LoadCertificate)
+            .expect("TODO: panic message");
     if !items.is_empty() {
         let mut certificates = Vec::<Certificate>::new();
         for item in items {
             match item {
-                Item::X509Certificate(cert) => certificates.push(Certificate(cert)),
+                Item::X509Certificate(cert) => {
+                    certificates.push(Certificate(cert))
+                }
                 _ => println!("unhandled Certificate item"),
             }
         }
@@ -35,7 +40,10 @@ pub fn load_certs(path: &str) -> Result<Vec<Certificate>> {
 }
 
 pub fn load_keys(path: &str) -> Result<Vec<PrivateKey>> {
-    let items: Vec<Item>  = rustls_pemfile::read_all(&mut BufReader::new(File::open(path)?)).map_err(|_| CertError::LoadCertificate).expect("TODO: panic message");
+    let items: Vec<Item> =
+        rustls_pemfile::read_all(&mut BufReader::new(File::open(path)?))
+            .map_err(|_| CertError::LoadCertificate)
+            .expect("TODO: panic message");
     if !items.is_empty() {
         let mut certificates = Vec::<PrivateKey>::new();
         for item in items {

@@ -27,6 +27,7 @@ pub mod kcp;
 #[cfg(feature = "grpc")]
 pub mod grpc;
 
+#[allow(dead_code)]
 trait IOStream: AsyncRead + AsyncWrite + Send + Sync + Unpin {}
 
 #[allow(clippy::upper_case_acronyms)]
@@ -58,6 +59,7 @@ pub trait AsyncAccept: Send + Sync + Unpin {
     const SCHEME: &'static str;
     type IO: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static;
     type Base: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static;
+    #[allow(dead_code)]
     fn addr(&self) -> &CommonAddr;
     // initial accept
     async fn accept_base(&self) -> io::Result<(Self::Base, SocketAddr)>;

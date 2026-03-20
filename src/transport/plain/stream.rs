@@ -59,6 +59,7 @@ impl PlainStream {
 }
 
 #[cfg(target_os = "linux")]
+#[allow(unused_imports)]
 pub use linux_ext::*;
 
 #[cfg(target_os = "linux")]
@@ -68,7 +69,7 @@ pub mod linux_ext {
     use tokio::io::Interest;
 
     #[inline]
-    pub fn split(x: &mut PlainStream) -> (ReadHalf, WriteHalf) {
+    pub fn split(x: &mut PlainStream) -> (ReadHalf<'_>, WriteHalf<'_>) {
         let ptr = x as *mut PlainStream;
         (
             ReadHalf(ptr, std::marker::PhantomData),

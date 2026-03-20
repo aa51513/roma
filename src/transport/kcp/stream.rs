@@ -15,6 +15,7 @@ impl KcpStreamWrapper {
         KcpStreamWrapper { inner: stream }
     }
 
+    #[allow(dead_code)]
     pub fn peer_addr(&self) -> SocketAddr {
         *self.inner.peer_addr()
     }

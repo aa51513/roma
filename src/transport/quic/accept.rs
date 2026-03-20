@@ -8,12 +8,14 @@ use async_trait::async_trait;
 use quinn::Endpoint;
 
 use super::QuicStream;
-use crate::utils::{self, CommonAddr};
+use crate::utils::CommonAddr;
 use crate::transport::{AsyncConnect, AsyncAccept, Transport};
 
 pub struct Acceptor<C> {
+    #[allow(dead_code)]
     cc: Arc<C>,
     lis: Endpoint,
+    #[allow(dead_code)]
     addr: CommonAddr,
 }
 

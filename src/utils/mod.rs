@@ -17,6 +17,7 @@ pub mod cert;
 pub use cert::{load_certs, load_keys, generate_cert_key};
 
 #[allow(clippy::mut_from_ref)]
+#[allow(dead_code)]
 #[inline]
 pub fn const_cast<T>(x: &UnsafeCell<T>) -> &mut T {
     unsafe { &mut *x.get() }
