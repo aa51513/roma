@@ -18,6 +18,8 @@ pub enum TransportConfig {
     QUIC(QuicConfig),
     #[cfg(feature = "kcp")]
     KCP(KcpConfig),
+    #[cfg(feature = "grpc")]
+    GRPC(GrpcConfig),
 }
 
 impl Default for TransportConfig {
@@ -39,6 +41,8 @@ impl Display for TransportConfig {
             QUIC(_) => write!(f, "quic"),
             #[cfg(feature = "kcp")]
             KCP(_) => write!(f, "kcp"),
+            #[cfg(feature = "grpc")]
+            GRPC(_) => write!(f, "grpc"),
         }
     }
 }
@@ -107,6 +111,15 @@ fn default_kcp_nc() -> bool {
     false
 }
 
+#[cfg(feature = "grpc")]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GrpcConfig {
+    pub path: String,
+
+    #[serde(default)]
+    pub mux: usize,
+}
+
 // ===== Loaders =====
 #[cfg(feature = "ws")]
 use crate::transport::ws;
@@ -153,5 +166,29 @@ where
 
     fn apply_to_lis_with_conn(&self, conn: Arc<C>, lis: L) -> Self::Acceptor {
         h2::Acceptor::new(conn, lis, self.path.clone(), self.server_push)
+    }
+}
+
+#[cfg(feature = "grpc")]
+use crate::transport::grpc;
+#[cfg(feature = "grpc")]
+impl<L, C> WithTransport<L, C> for GrpcConfig
+where
+    L: AsyncAccept,
+    C: AsyncConnect + 'static,
+{
+    type Acceptor = grpc::Acceptor<L, C>;
+    type Connector = grpc::Connector<C>;
+
+    fn apply_to_lis(&self, _: L) -> Self::Acceptor {
+        unreachable!()
+    }
+
+    fn apply_to_conn(&self, conn: C) -> Self::Connector {
+        grpc::Connector::new(conn, self.path.clone(), self.mux)
+    }
+
+    fn apply_to_lis_with_conn(&self, conn: Arc<C>, lis: L) -> Self::Acceptor {
+        grpc::Acceptor::new(conn, lis, self.path.clone())
     }
 }

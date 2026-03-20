@@ -18,6 +18,9 @@ use crate::config::trans::WebSocketConfig;
 #[cfg(feature = "h2c")]
 use crate::config::trans::HTTP2Config;
 
+#[cfg(feature = "grpc")]
+use crate::config::trans::GrpcConfig;
+
 // #[cfg(feature = "quic")]
 // use crate::config::trans::QuicConfig;
 
@@ -68,6 +71,17 @@ fn spawn_lis_half_with_trans<L, C>(
             let lis = lis.take_other().unwrap();
             workers.push(tokio::spawn(proxy(Arc::new(lis), Arc::new(conn))));
         }
+        #[cfg(feature = "grpc")]
+        GRPC(lisc) => {
+            let conn = Arc::new(conn);
+            let lis =
+                <GrpcConfig as WithTransport<L, C>>::apply_to_lis_with_conn(
+                    lisc,
+                    conn.clone(),
+                    lis.take_other().unwrap(),
+                );
+            workers.push(tokio::spawn(proxy(Arc::new(lis), conn)));
+        }
     }
 }
 
@@ -109,6 +123,12 @@ fn spawn_conn_half_with_trans<L, C>(
         // kcp does not need extra configuration
         #[cfg(feature = "kcp")]
         KCP(_) => {
+            spawn_lis_half_with_trans(workers, lis_trans, lis, conn);
+        }
+        #[cfg(feature = "grpc")]
+        GRPC(connc) => {
+            let conn =
+                <GrpcConfig as WithTransport<L, C>>::apply_to_conn(connc, conn);
             spawn_lis_half_with_trans(workers, lis_trans, lis, conn);
         }
     }

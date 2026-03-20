@@ -14,7 +14,7 @@ opt-level = 0
 
 [features]
 default = ["full"]
-full = ["uds", "tls", "ws", "h2c", "udp", "quic", "kcp"]
+full = ["uds", "tls", "ws", "h2c", "udp", "quic", "kcp", "grpc"]
 uds = []
 tls = ["rustls", "tokio-rustls", "webpki", "webpki-roots", "rcgen", "rustls-native-certs"]
 ws = ["tokio-tungstenite", "http"]
@@ -22,6 +22,7 @@ h2c = ["h2", "http"]
 udp = ["tokio/sync", "tokio/time"]
 quic = ["udp", "tls", "quinn"]
 kcp = ["udp", "dep:kcp-tokio"]
+grpc = ["h2c", "tonic", "prost", "tokio-stream"]
 
 [dependencies]
 # common
@@ -70,5 +71,10 @@ quinn = { version = "0.9.3", default-features = true, features = ["rustls","nati
 
 # kcp
 kcp-tokio = { version = "0.4", optional = true }
+
+# grpc
+tonic = { version = "0.10", optional = true }
+prost = { version = "0.12", optional = true }
+tokio-stream = { version = "0.1", optional = true }
 
 

@@ -24,6 +24,9 @@ pub mod quic;
 #[cfg(feature = "kcp")]
 pub mod kcp;
 
+#[cfg(feature = "grpc")]
+pub mod grpc;
+
 trait IOStream: AsyncRead + AsyncWrite + Send + Sync + Unpin {}
 
 #[allow(clippy::upper_case_acronyms)]
@@ -35,6 +38,7 @@ pub enum Transport {
     UDP,
     QUIC,
     KCP,
+    GRPC,
 }
 
 #[async_trait]
