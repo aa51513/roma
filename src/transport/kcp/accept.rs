@@ -1,10 +1,10 @@
-use std::io::Result;
+use std::io::{Result, Error, ErrorKind};
 use std::net::SocketAddr;
 
 use log::debug;
 use async_trait::async_trait;
 
-use kcp_tokio::{KcpConfig, KcpListener, KcpStream};
+use kcp_tokio::{KcpConfig, KcpListener};
 
 use super::KcpStreamWrapper;
 use crate::utils::CommonAddr;
@@ -25,7 +25,8 @@ impl Acceptor {
         };
         debug!("kcp bind {}", &bind_addr);
         let config = KcpConfig::new().fast_mode();
-        let listener = KcpListener::bind(bind_addr, config).await?;
+        let listener = KcpListener::bind(bind_addr, config).await
+            .map_err(|e| Error::new(ErrorKind::Other, e))?;
         Ok(Acceptor { listener, addr })
     }
 }
@@ -43,7 +44,8 @@ impl AsyncAccept for Acceptor {
     fn addr(&self) -> &CommonAddr { &self.addr }
 
     async fn accept_base(&self) -> Result<(Self::Base, SocketAddr)> {
-        let (stream, peer_addr) = self.listener.accept().await?;
+        let (stream, peer_addr) = self.listener.accept().await
+            .map_err(|e| Error::new(ErrorKind::Other, e))?;
         debug!("kcp accept {} <- {}", &self.addr, &peer_addr);
         Ok((KcpStreamWrapper::new(stream), peer_addr))
     }

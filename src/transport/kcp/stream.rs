@@ -1,13 +1,10 @@
-use std::io::Result;
 use std::pin::Pin;
 use std::task::{Poll, Context};
+use std::io::Result;
 use std::net::SocketAddr;
 
 use tokio::io::{AsyncRead, AsyncWrite};
-
 use kcp_tokio::KcpStream;
-
-use crate::transport::IOStream;
 
 pub struct KcpStreamWrapper {
     inner: KcpStream,
@@ -19,11 +16,9 @@ impl KcpStreamWrapper {
     }
 
     pub fn peer_addr(&self) -> SocketAddr {
-        self.inner.peer_addr()
+        *self.inner.peer_addr()
     }
 }
-
-impl IOStream for KcpStreamWrapper {}
 
 impl AsyncRead for KcpStreamWrapper {
     fn poll_read(
@@ -58,3 +53,6 @@ impl AsyncWrite for KcpStreamWrapper {
         Pin::new(&mut self.inner).poll_shutdown(cx)
     }
 }
+
+unsafe impl Send for KcpStreamWrapper {}
+unsafe impl Sync for KcpStreamWrapper {}

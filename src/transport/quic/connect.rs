@@ -61,7 +61,8 @@ impl AsyncConnect for Connector {
 
     async fn connect(&self) -> Result<Self::IO> {
         let client = new_client(self).await?;
-        let (send, recv) = client.open_bi().await?;
+        let (send, recv) = client.open_bi().await
+            .map_err(|e| Error::new(ErrorKind::Other, e))?;
         Ok(QuicStream::new(send, recv))
     }
 }
@@ -103,7 +104,8 @@ async fn new_client(cc: &Connector) -> Result<Connection> {
             zero_rtt.await;
             new_conn
         }
-        Err(connecting) => connecting.await?,
+        Err(connecting) => connecting.await
+            .map_err(|e| Error::new(ErrorKind::ConnectionRefused, e))?,
     };
 
     // store connection

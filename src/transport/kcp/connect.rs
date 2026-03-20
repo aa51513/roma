@@ -1,4 +1,4 @@
-use std::io::Result;
+use std::io::{Result, Error, ErrorKind};
 use std::net::SocketAddr;
 
 use log::debug;
@@ -45,7 +45,8 @@ impl AsyncConnect for Connector {
         };
         debug!("kcp connect -> {}", &connect_addr);
         let config = KcpConfig::new().fast_mode();
-        let stream = KcpStream::connect(connect_addr, config).await?;
+        let stream = KcpStream::connect(connect_addr, config).await
+            .map_err(|e| Error::new(ErrorKind::Other, e))?;
         Ok(KcpStreamWrapper::new(stream))
     }
 }
