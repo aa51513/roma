@@ -17,13 +17,13 @@ jobs:
       matrix:
         include:
           - name: Linux x86_64
-            os: ubuntu-20.04
+            os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact: roma-linux-x86_64
             archive: tar.gz
 
           - name: Linux musl x86_64
-            os: ubuntu-20.04
+            os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             artifact: roma-linux-musl-x86_64
             archive: tar.gz
