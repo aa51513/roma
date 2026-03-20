@@ -1,7 +1,6 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::io::Result;
-use std::cell::UnsafeCell;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
 
@@ -10,7 +9,7 @@ use tokio::net::TcpStream;
 #[cfg(all(unix, feature = "uds"))]
 use tokio::net::UnixStream;
 
-use crate::utils;
+use crate::transport::IOStream;
 
 #[allow(clippy::upper_case_acronyms)]
 pub enum PlainStream {
@@ -19,9 +18,16 @@ pub enum PlainStream {
     UDS(UnixStream),
 }
 
-pub struct ReadHalf<'a>(&'a UnsafeCell<PlainStream>);
+pub struct ReadHalf<'a>(*const PlainStream, std::marker::PhantomData<&'a PlainStream>);
 
-pub struct WriteHalf<'a>(&'a UnsafeCell<PlainStream>);
+pub struct WriteHalf<'a>(*mut PlainStream, std::marker::PhantomData<&'a mut PlainStream>);
+
+unsafe impl Send for ReadHalf<'_> {}
+unsafe impl Sync for ReadHalf<'_> {}
+unsafe impl Send for WriteHalf<'_> {}
+unsafe impl Sync for WriteHalf<'_> {}
+
+impl IOStream for PlainStream {}
 
 #[cfg(unix)]
 impl AsRawFd for PlainStream {
@@ -35,11 +41,11 @@ impl AsRawFd for PlainStream {
 }
 
 impl AsRef<PlainStream> for ReadHalf<'_> {
-    fn as_ref(&self) -> &PlainStream { unsafe { &*self.0.get() } }
+    fn as_ref(&self) -> &PlainStream { unsafe { &*self.0 } }
 }
 
 impl AsRef<PlainStream> for WriteHalf<'_> {
-    fn as_ref(&self) -> &PlainStream { unsafe { &*self.0.get() } }
+    fn as_ref(&self) -> &PlainStream { unsafe { &*self.0 } }
 }
 
 impl PlainStream {
@@ -63,8 +69,11 @@ pub mod linux_ext {
 
     #[inline]
     pub fn split(x: &mut PlainStream) -> (ReadHalf, WriteHalf) {
-        let cell = UnsafeCell::new(x);
-        (ReadHalf(&cell), WriteHalf(&cell))
+        let ptr = x as *mut PlainStream;
+        (
+            ReadHalf(ptr, std::marker::PhantomData),
+            WriteHalf(ptr, std::marker::PhantomData),
+        )
     }
 
     // tokio >= 1.9.0
@@ -129,8 +138,8 @@ impl AsyncRead for ReadHalf<'_> {
         cx: &mut Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> Poll<Result<()>> {
-        Pin::new(utils::const_cast(self.get_mut().0))
-            .poll_read(cx, buf)
+        let stream = unsafe { &mut *(self.get_mut().0 as *mut PlainStream) };
+        Pin::new(stream).poll_read(cx, buf)
     }
 }
 
@@ -180,8 +189,8 @@ impl AsyncWrite for WriteHalf<'_> {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize>> {
-        Pin::new(utils::const_cast(self.get_mut().0))
-            .poll_write(cx, buf)
+        let stream = unsafe { &mut *self.get_mut().0 };
+        Pin::new(stream).poll_write(cx, buf)
     }
 
     #[inline]
@@ -189,7 +198,8 @@ impl AsyncWrite for WriteHalf<'_> {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Result<()>> {
-        Pin::new(utils::const_cast(self.get_mut().0)).poll_flush(cx)
+        let stream = unsafe { &mut *self.get_mut().0 };
+        Pin::new(stream).poll_flush(cx)
     }
 
     #[inline]
@@ -197,7 +207,7 @@ impl AsyncWrite for WriteHalf<'_> {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Result<()>> {
-        Pin::new(utils::const_cast(self.get_mut().0))
-            .poll_shutdown(cx)
+        let stream = unsafe { &mut *self.get_mut().0 };
+        Pin::new(stream).poll_shutdown(cx)
     }
 }
