@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
 name = "roma"
-version = "0.6.4"
+version = "0.6.5"
 authors = ["aa51513 <aa51513@github.com>"]
 license = "MIT"
 
